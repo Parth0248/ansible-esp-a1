@@ -1,0 +1,29 @@
+---
+- name: Undeploy Web Server from All VMs
+  hosts: webservers
+  become: yes
+  tasks:
+    - name: Stop webserver service
+      systemd:
+        name: webserver
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+    
+    - name: Remove systemd service file
+      file:
+        path: /etc/systemd/system/webserver.service
+        state: absent
+    
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+    
+    - name: Remove web directory
+      file:
+        path: /opt/webserver
+        state: absent
+    
+    - name: Display cleanup status
+      debug:
+        msg: "{{ inventory_hostname }} cleanup completed successfully"

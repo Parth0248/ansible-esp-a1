@@ -1,0 +1,114 @@
+---
+- name: Deploy Web Servers on Both VMs
+  hosts: webservers
+  become: yes
+  tasks:
+    - name: Update package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      
+    - name: Install required packages
+      apt:
+        name:
+          - python3
+          - python3-pip
+        state: present
+    
+    - name: Create web directory
+      file:
+        path: /opt/webserver
+        state: directory
+        mode: '0755'
+    
+    - name: Copy index.html for VM1
+      copy:
+        src: ../files/index_vm1.html
+        dest: /opt/webserver/index.html
+        mode: '0644'
+      when: inventory_hostname == 'vm1'
+    
+    - name: Copy index.html for VM2
+      copy:
+        src: ../files/index_vm2.html
+        dest: /opt/webserver/index.html
+        mode: '0644'
+      when: inventory_hostname == 'vm2'
+    
+    - name: Create Python web server script
+      copy:
+        content: |
+          #!/usr/bin/env python3
+          import http.server
+          import socketserver
+          import signal
+          import sys
+          
+          PORT = 8080
+          web_dir = "/opt/webserver"
+          
+          class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
+              def __init__(self, *args, **kwargs):
+                  super().__init__(*args, directory=web_dir, **kwargs)
+          
+          def signal_handler(sig, frame):
+              print('Stopping web server...')
+              sys.exit(0)
+          
+          signal.signal(signal.SIGINT, signal_handler)
+          signal.signal(signal.SIGTERM, signal_handler)
+          
+          with socketserver.TCPServer(("", PORT), MyHTTPRequestHandler) as httpd:
+              print(f"Server running on port {PORT}")
+              httpd.serve_forever()
+        dest: /opt/webserver/webserver.py
+        mode: '0755'
+    
+    - name: Create systemd service file
+      copy:
+        content: |
+          [Unit]
+          Description=Simple Python Web Server - {{ inventory_hostname }}
+          After=network.target
+          
+          [Service]
+          Type=simple
+          User=nobody
+          Group=nogroup
+          WorkingDirectory=/opt/webserver
+          ExecStart=/usr/bin/python3 /opt/webserver/webserver.py
+          Restart=always
+          RestartSec=5
+          
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/webserver.service
+        mode: '0644'
+    
+    - name: Set ownership of web directory
+      file:
+        path: /opt/webserver
+        owner: nobody
+        group: nogroup
+        recurse: yes
+    
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+    
+    - name: Enable and start webserver service
+      systemd:
+        name: webserver
+        enabled: yes
+        state: started
+    
+    - name: Wait for service to be active
+      wait_for:
+        port: 8080
+        host: "0.0.0.0"
+        delay: 2
+        timeout: 30
+    
+    - name: Display access information
+      debug:
+        msg: "Access {{ inventory_hostname }} at: http://{{ ansible_host }}:8080"
