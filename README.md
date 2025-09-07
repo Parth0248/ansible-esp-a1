@@ -21,7 +21,6 @@ ansible-webserver-project/
 │   └── hosts                      # VM inventory file
 ├── playbooks/
 │   ├── deploy-webserver.yml       # Deployment playbook
-│   ├── deploy-webserver-embedded.yml  # Alternative with embedded HTML
 │   └── undeploy-webserver.yml     # Cleanup playbook
 └── files/
     ├── index_vm1.html             # VM1 web page
